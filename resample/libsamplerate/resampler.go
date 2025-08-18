@@ -27,6 +27,8 @@ import (
 	"unsafe"
 )
 
+type ConverterType C.int
+
 // SincBestQuality - This is a bandlimited interpolator derived from the mathematical sinc function and this is the
 // highest quality sinc based converter, providing a worst case Signal-to-Noise Ratio (SNR) of 97 decibels (dB) at a
 // bandwidth of 97%. All three SRC_SINC_* converters are based on the techniques of Julius O. Smith although this
@@ -38,11 +40,11 @@ import (
 // but the conversion speed is blindlingly fast.
 // Linear - A linear converter. Again the quality is poor, but the conversion speed is blindingly fast.
 const (
-	SincBestQuality   = C.SRC_SINC_BEST_QUALITY
-	SincMediumQuality = C.SRC_SINC_MEDIUM_QUALITY
-	SincFastest       = C.SRC_SINC_FASTEST
-	ZeroOrderHold     = C.SRC_ZERO_ORDER_HOLD
-	Linear            = C.SRC_LINEAR
+	SincBestQuality   ConverterType = C.SRC_SINC_BEST_QUALITY
+	SincMediumQuality ConverterType = C.SRC_SINC_MEDIUM_QUALITY
+	SincFastest       ConverterType = C.SRC_SINC_FASTEST
+	ZeroOrderHold     ConverterType = C.SRC_ZERO_ORDER_HOLD
+	Linear            ConverterType = C.SRC_LINEAR
 )
 
 type Resampler struct {
@@ -63,7 +65,7 @@ type Resampler struct {
 	outgoingAudio      *codec.Wav
 }
 
-func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, frameDuration time.Duration, converterType int) (*Resampler, error) {
+func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, frameDuration time.Duration, converterType ConverterType) (*Resampler, error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
 		return nil, codec.NotPcm
 	}

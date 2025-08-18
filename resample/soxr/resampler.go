@@ -14,12 +14,14 @@ import (
 	"time"
 )
 
+type Quality C.int
+
 const (
-	Quick           = C.SOXR_QQ  // Quick cubic interpolation
-	LowQuality      = C.SOXR_LQ  // LowQuality 16-bit with larger rolloff
-	MediumQuality   = C.SOXR_MQ  // MediumQuality 16-bit with medium rolloff
-	HighQuality     = C.SOXR_HQ  // HighQuality high quality
-	VeryHighQuality = C.SOXR_VHQ // VeryHighQuality very high quality
+	Quick           Quality = C.SOXR_QQ  // Quick cubic interpolation
+	LowQuality      Quality = C.SOXR_LQ  // LowQuality 16-bit with larger rolloff
+	MediumQuality   Quality = C.SOXR_MQ  // MediumQuality 16-bit with medium rolloff
+	HighQuality     Quality = C.SOXR_HQ  // HighQuality high quality
+	VeryHighQuality Quality = C.SOXR_VHQ // VeryHighQuality very high quality
 )
 
 type Resampler struct {
@@ -36,7 +38,7 @@ type Resampler struct {
 	outgoingAudio  *codec.Wav
 }
 
-func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, outgoingBufferDuration time.Duration, quality int) (*Resampler, error) {
+func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, outgoingBufferDuration time.Duration, quality Quality) (*Resampler, error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
 		return nil, codec.NotPcm
 	}
