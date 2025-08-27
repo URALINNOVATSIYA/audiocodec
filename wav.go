@@ -2,18 +2,23 @@ package audiocodec
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"time"
 )
 
 type Wav struct {
-	data  []byte
-	codec *Codec
+	headers  []byte
+	data     []byte
+	codec    *Codec
+	read     int
+	editable bool
 }
 
 func NewWav(codec *Codec) *Wav {
 	return &Wav{
-		codec: codec,
+		codec:    codec,
+		editable: true,
 	}
 }
 
@@ -22,48 +27,115 @@ func (w *Wav) DataSize() int {
 }
 
 func (w *Wav) Write(data []byte) (int, error) {
+	if !w.editable {
+		return 0, WavFileIsNotEditable
+	}
+
 	w.data = append(w.data, data...)
 	return len(data), nil
 }
 
-func (w *Wav) ExportTo(writer io.Writer) (size int, err error) {
-	size = w.riffSize()
-	data := make([]byte, size)
+func (w *Wav) Read(p []byte) (n int, err error) {
+	if w.editable {
+		w.editable = false
+		w.prepareHeaders()
+	}
 
-	copy(data[0:4], "RIFF")
-	binary.LittleEndian.PutUint32(data[4:8], uint32(size)-8)
-	copy(data[8:12], "WAVE")
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	if w.read >= len(w.headers)+len(w.data) {
+		return 0, io.EOF
+	}
+
+	hSize := len(w.headers)
+	if w.read < hSize {
+		n = copy(p, w.headers[w.read:])
+		w.read += n
+
+		if n == len(p) {
+			return n, nil
+		}
+	}
+
+	dr := copy(p[n:], w.data[w.read-hSize:])
+	w.read += dr
+	n += dr
+
+	return n, nil
+}
+
+func (w *Wav) prepareHeaders() {
+	w.headers = make([]byte, w.headersSize())
+
+	copy(w.headers[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(w.headers[4:8], uint32(w.riffSize())-8)
+	copy(w.headers[8:12], "WAVE")
 
 	// Chunk ID "fmt "
-	copy(data[12:16], "fmt ")
-	binary.LittleEndian.PutUint32(data[16:20], uint32(w.fmtChunkSize()-8))
-	binary.LittleEndian.PutUint16(data[20:22], uint16(w.codec.CompressionCode()))
-	binary.LittleEndian.PutUint16(data[22:24], 1)
-	binary.LittleEndian.PutUint32(data[24:28], uint32(w.codec.SampleRate))
-	binary.LittleEndian.PutUint32(data[28:32], uint32(w.codec.Size(time.Second)))
-	binary.LittleEndian.PutUint16(data[32:34], uint16(w.codec.SampleSize()))
-	binary.LittleEndian.PutUint16(data[34:36], uint16(w.codec.BitRate))
+	copy(w.headers[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(w.headers[16:20], uint32(w.fmtChunkSize()-8))
+	binary.LittleEndian.PutUint16(w.headers[20:22], uint16(w.compressionCode()))
+	binary.LittleEndian.PutUint16(w.headers[22:24], 1)
+	binary.LittleEndian.PutUint32(w.headers[24:28], uint32(w.codec.SampleRate))
+	binary.LittleEndian.PutUint32(w.headers[28:32], uint32(w.codec.Size(time.Second)))
+	binary.LittleEndian.PutUint16(w.headers[32:34], uint16(w.codec.SampleSize()))
+	binary.LittleEndian.PutUint16(w.headers[34:36], uint16(w.codec.BitRate))
 
 	if w.codec.Name == Pcm {
 		// Chunk ID "data"
-		copy(data[36:40], "data")
-		binary.LittleEndian.PutUint32(data[40:44], uint32(len(w.data)))
-		copy(data[44:], w.data)
+		copy(w.headers[36:40], "data")
+		binary.LittleEndian.PutUint32(w.headers[40:44], uint32(len(w.data)))
 	} else {
-		binary.LittleEndian.PutUint16(data[36:38], uint16(w.extraFormatSize()))
+		binary.LittleEndian.PutUint16(w.headers[36:38], uint16(w.extraFormatSize()))
 
 		// Chunk ID "fact"
-		copy(data[38:42], "fact")
-		binary.LittleEndian.PutUint32(data[42:46], uint32(4)) // Chunk Data Size
-		binary.LittleEndian.PutUint32(data[46:50], uint32(w.codec.SampleCountBySize(len(w.data))))
+		copy(w.headers[38:42], "fact")
+		binary.LittleEndian.PutUint32(w.headers[42:46], uint32(4)) // Chunk Data Size
+		binary.LittleEndian.PutUint32(w.headers[46:50], uint32(w.codec.SampleCountBySize(len(w.data))))
 
 		// Chunk ID "data"
-		copy(data[50:54], "data")
-		binary.LittleEndian.PutUint32(data[54:58], uint32(len(w.data)))
-		copy(data[58:], w.data)
+		copy(w.headers[50:54], "data")
+		binary.LittleEndian.PutUint32(w.headers[54:58], uint32(len(w.data)))
+	}
+}
+
+func (w *Wav) headersSize() int {
+	return w.riffSize() - len(w.data)
+}
+
+func (w *Wav) compressionCode() int {
+	switch w.codec.Name {
+	case Pcm:
+		return 1
+	case PcmA:
+		return 6
+	case PcmU:
+		return 7
 	}
 
-	return writer.Write(data)
+	panic(fmt.Errorf("compression code not found for \"%s\" codec", w.codec.Name))
+}
+
+func (w *Wav) ExportTo(writer io.Writer) (size int, err error) {
+	if w.editable {
+		w.editable = false
+		w.prepareHeaders()
+	}
+
+	var n int
+	if n, err = writer.Write(w.headers); err != nil {
+		return 0, err
+	}
+	size += n
+
+	if n, err = writer.Write(w.data); err != nil {
+		return 0, err
+	}
+	size += n
+
+	return size, nil
 }
 
 // Смещение	Размер 	Описание 			Значение

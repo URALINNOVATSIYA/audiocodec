@@ -76,10 +76,6 @@ func (c *Codec) IsEqual(c2 *Codec) bool {
 	return c.Name == c2.Name && c.SampleRate == c2.SampleRate && c.BitRate == c2.BitRate
 }
 
-func (c *Codec) CompressionCode() int {
-	return c.Name.CompressionCode()
-}
-
 func (c *Codec) IsPcm() bool {
 	return c.Name.IsPcm()
 }
@@ -111,17 +107,4 @@ func (n Name) String() string {
 
 func (n Name) IsPcm() bool {
 	return n == Pcm
-}
-
-func (n Name) CompressionCode() int {
-	switch n {
-	case Pcm:
-		return 1
-	case PcmA:
-		return 6
-	case PcmU:
-		return 7
-	}
-
-	panic(fmt.Errorf("compression code not found for \"%s\" codec", n))
 }
