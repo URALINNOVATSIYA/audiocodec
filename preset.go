@@ -1,4 +1,4 @@
-package codec
+package audiocodec
 
 import (
 	"fmt"

@@ -30,21 +30,21 @@ type Resampler struct {
 	outgoingUsed C.size_t
 	soxErr       C.soxr_error_t
 
-	incomingCodec  *codec.Codec
-	outgoingCodec  *codec.Codec
+	incomingCodec  *audiocodec.Codec
+	outgoingCodec  *audiocodec.Codec
 	outgoingBuffer []byte
 	debug          bool
-	incomingAudio  *codec.Wav
-	outgoingAudio  *codec.Wav
+	incomingAudio  *audiocodec.Wav
+	outgoingAudio  *audiocodec.Wav
 }
 
-func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, outgoingBufferDuration time.Duration, quality Quality) (*Resampler, error) {
+func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, outgoingBufferDuration time.Duration, quality Quality) (*Resampler, error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
-		return nil, codec.NotPcm
+		return nil, audiocodec.NotPcm
 	}
 
 	if incomingCodec.IsEqual(outgoingCodec) {
-		return nil, codec.IncomingAndOutgoingCodecsIsEquals
+		return nil, audiocodec.IncomingAndOutgoingCodecsIsEquals
 	}
 
 	resampler := &Resampler{
@@ -94,7 +94,7 @@ func (r *Resampler) error() error {
 	return nil
 }
 
-func (r *Resampler) dataType(codec *codec.Codec) (C.soxr_datatype_t, error) {
+func (r *Resampler) dataType(codec *audiocodec.Codec) (C.soxr_datatype_t, error) {
 	switch codec.BitRate {
 	case 16:
 		return C.SOXR_INT16, nil
@@ -169,8 +169,8 @@ func (r *Resampler) Reset() error {
 
 func (r *Resampler) DebugEnable() {
 	r.debug = true
-	r.incomingAudio = codec.NewWav(r.incomingCodec)
-	r.outgoingAudio = codec.NewWav(r.outgoingCodec)
+	r.incomingAudio = audiocodec.NewWav(r.incomingCodec)
+	r.outgoingAudio = audiocodec.NewWav(r.outgoingCodec)
 }
 
 func (r *Resampler) DebugDisable() {
@@ -187,7 +187,7 @@ func (r *Resampler) SaveOutgoingAudio(fileName string) (int, error) {
 	return r.saveAudio(fileName, r.outgoingAudio)
 }
 
-func (r *Resampler) saveAudio(fileName string, wav *codec.Wav) (int, error) {
+func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return 0, err

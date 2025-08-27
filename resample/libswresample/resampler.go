@@ -22,21 +22,21 @@ type Resampler struct {
 	incomingPointer **C.uint8_t
 	outgoingPointer **C.uint8_t
 
-	incomingCodec  *codec.Codec
-	outgoingCodec  *codec.Codec
+	incomingCodec  *audiocodec.Codec
+	outgoingCodec  *audiocodec.Codec
 	outgoingBuffer []byte
 	debug          bool
-	incomingAudio  *codec.Wav
-	outgoingAudio  *codec.Wav
+	incomingAudio  *audiocodec.Wav
+	outgoingAudio  *audiocodec.Wav
 }
 
-func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, outgoingBufferDuration time.Duration) (*Resampler, error) {
+func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, outgoingBufferDuration time.Duration) (*Resampler, error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
-		return nil, codec.NotPcm
+		return nil, audiocodec.NotPcm
 	}
 
 	if incomingCodec.IsEqual(outgoingCodec) {
-		return nil, codec.IncomingAndOutgoingCodecsIsEquals
+		return nil, audiocodec.IncomingAndOutgoingCodecsIsEquals
 	}
 
 	r := &Resampler{
@@ -70,7 +70,7 @@ func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, outgoi
 	return r, nil
 }
 
-func (r *Resampler) sampleFormat(codec *codec.Codec) (int32, error) {
+func (r *Resampler) sampleFormat(codec *audiocodec.Codec) (int32, error) {
 	switch codec.BitRate {
 	case 16:
 		return C.AV_SAMPLE_FMT_S16, nil
@@ -138,8 +138,8 @@ func (r *Resampler) Free() {
 
 func (r *Resampler) DebugEnable() {
 	r.debug = true
-	r.incomingAudio = codec.NewWav(r.incomingCodec)
-	r.outgoingAudio = codec.NewWav(r.outgoingCodec)
+	r.incomingAudio = audiocodec.NewWav(r.incomingCodec)
+	r.outgoingAudio = audiocodec.NewWav(r.outgoingCodec)
 }
 
 func (r *Resampler) DebugDisable() {
@@ -156,7 +156,7 @@ func (r *Resampler) SaveOutgoingAudio(fileName string) (int, error) {
 	return r.saveAudio(fileName, r.outgoingAudio)
 }
 
-func (r *Resampler) saveAudio(fileName string, wav *codec.Wav) (int, error) {
+func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return 0, err

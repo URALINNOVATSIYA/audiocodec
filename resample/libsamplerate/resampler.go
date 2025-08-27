@@ -53,25 +53,25 @@ type Resampler struct {
 	incomingBuffer []C.float
 	outgoingBuffer []C.float
 
-	incomingCodec      *codec.Codec
+	incomingCodec      *audiocodec.Codec
 	incomingSampleSize int
-	outgoingCodec      *codec.Codec
+	outgoingCodec      *audiocodec.Codec
 	outgoingSampleSize int
 	encoder            func(sample float32, buf []byte)
 	decoder            func(sample []byte) float32
 	outgoingBufferGo   []byte
 	debug              bool
-	incomingAudio      *codec.Wav
-	outgoingAudio      *codec.Wav
+	incomingAudio      *audiocodec.Wav
+	outgoingAudio      *audiocodec.Wav
 }
 
-func NewResampler(incomingCodec *codec.Codec, outgoingCodec *codec.Codec, frameDuration time.Duration, converterType ConverterType) (*Resampler, error) {
+func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, frameDuration time.Duration, converterType ConverterType) (*Resampler, error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
-		return nil, codec.NotPcm
+		return nil, audiocodec.NotPcm
 	}
 
 	if incomingCodec.IsEqual(outgoingCodec) {
-		return nil, codec.IncomingAndOutgoingCodecsIsEquals
+		return nil, audiocodec.IncomingAndOutgoingCodecsIsEquals
 	}
 
 	resampler := &Resampler{
@@ -183,8 +183,8 @@ func (r *Resampler) error(errCode C.int) string {
 
 func (r *Resampler) DebugEnable() {
 	r.debug = true
-	r.incomingAudio = codec.NewWav(r.incomingCodec)
-	r.outgoingAudio = codec.NewWav(r.outgoingCodec)
+	r.incomingAudio = audiocodec.NewWav(r.incomingCodec)
+	r.outgoingAudio = audiocodec.NewWav(r.outgoingCodec)
 }
 
 func (r *Resampler) DebugDisable() {
@@ -201,7 +201,7 @@ func (r *Resampler) SaveOutgoingAudio(fileName string) (int, error) {
 	return r.saveAudio(fileName, r.outgoingAudio)
 }
 
-func (r *Resampler) saveAudio(fileName string, wav *codec.Wav) (int, error) {
+func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return 0, err
