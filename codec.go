@@ -80,6 +80,10 @@ func (c *Codec) IsPcm() bool {
 	return c.Name.IsPcm()
 }
 
+func (c *Codec) Preset() Preset {
+	return Preset(fmt.Sprintf("%s_%d_%d", c.Name, c.SampleRate, c.BitRate))
+}
+
 type Name string
 
 const (
