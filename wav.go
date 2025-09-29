@@ -73,11 +73,11 @@ func NewWavFromBytes(b []byte) (*Wav, error) {
 			w.data = b[payloadStart : payloadStart+int(chunkSize) : payloadStart+int(chunkSize)]
 		}
 
-		step := int(chunkSize)
-		if (chunkSize & 1) == 1 {
-			step++
+		// Advance to next chunk with word alignment
+		if (int(chunkSize) & 1) == 1 {
+			chunkSize++ // pad byte if odd-sized chunk
 		}
-		i = payloadStart + step
+		i = payloadStart + int(chunkSize)
 	}
 
 	if w.codec.Name == "" || w.codec.SampleRate == 0 || w.codec.BitRate == 0 {
