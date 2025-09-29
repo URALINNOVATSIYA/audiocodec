@@ -165,5 +165,6 @@ func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int, error)
 		_ = file.Close()
 	}(file)
 
-	return wav.ExportTo(file)
+	size, err := wav.WriteTo(file)
+	return int(size), err
 }
