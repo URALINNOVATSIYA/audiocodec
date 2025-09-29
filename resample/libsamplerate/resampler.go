@@ -193,15 +193,15 @@ func (r *Resampler) DebugDisable() {
 	r.outgoingAudio = nil
 }
 
-func (r *Resampler) SaveIncomingAudio(fileName string) (int, error) {
+func (r *Resampler) SaveIncomingAudio(fileName string) (int64, error) {
 	return r.saveAudio(fileName, r.incomingAudio)
 }
 
-func (r *Resampler) SaveOutgoingAudio(fileName string) (int, error) {
+func (r *Resampler) SaveOutgoingAudio(fileName string) (int64, error) {
 	return r.saveAudio(fileName, r.outgoingAudio)
 }
 
-func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int, error) {
+func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int64, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return 0, err
@@ -210,6 +210,5 @@ func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int, error)
 		_ = file.Close()
 	}(file)
 
-	size, err := wav.WriteTo(file)
-	return int(size), err
+	return wav.WriteTo(file)
 }
