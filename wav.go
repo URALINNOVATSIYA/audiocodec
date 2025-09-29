@@ -22,6 +22,73 @@ func NewWav(codec *Codec) *Wav {
 	}
 }
 
+func NewWavFromBytes(b []byte) (*Wav, error) {
+	if len(b) < 44 || !(b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F') || !(b[8] == 'W' && b[9] == 'A' && b[10] == 'V' && b[11] == 'E') {
+		return nil, InvalidWav
+	}
+
+	var w Wav
+	w.codec = new(Codec)
+
+	i := 12
+	n := len(b)
+	for {
+		if i+8 > n {
+			break
+		}
+		chunkId0, chunkId1, chunkId2, chunkId3 := b[i], b[i+1], b[i+2], b[i+3]
+		chunkSize := binary.LittleEndian.Uint32(b[i+4 : i+8])
+		payloadStart := i + 8
+		payloadEnd := payloadStart + int(chunkSize)
+		if payloadEnd > n {
+			return nil, TruncatedWav
+		}
+
+		if chunkId0 == 'f' && chunkId1 == 'm' && chunkId2 == 't' && chunkId3 == ' ' {
+			if chunkSize < 16 {
+				return nil, fmt.Errorf("invalid fmt chunk: size=%d", chunkSize)
+			}
+			audioFormat := binary.LittleEndian.Uint16(b[payloadStart+0 : payloadStart+2])
+			numChannels := binary.LittleEndian.Uint16(b[payloadStart+2 : payloadStart+4])
+			sampleRate := binary.LittleEndian.Uint32(b[payloadStart+4 : payloadStart+8])
+			bitsPerSample := binary.LittleEndian.Uint16(b[payloadStart+14 : payloadStart+16])
+
+			switch audioFormat {
+			case 1:
+				w.codec.Name = Pcm
+			case 6:
+				w.codec.Name = PcmA
+			case 7:
+				w.codec.Name = PcmU
+			default:
+				return nil, fmt.Errorf("%w: format tag=%d", UnsupportedFormat, audioFormat)
+			}
+			if numChannels != 1 {
+				return nil, OnlyMonoSupported
+			}
+			w.codec.SampleRate = int(sampleRate)
+			w.codec.BitRate = int(bitsPerSample)
+		} else if chunkId0 == 'd' && chunkId1 == 'a' && chunkId2 == 't' && chunkId3 == 'a' {
+			w.headers = b[:payloadStart:payloadStart]
+			w.data = b[payloadStart : payloadStart+int(chunkSize) : payloadStart+int(chunkSize)]
+		}
+
+		// Advance to next chunk with word alignment
+		if (int(chunkSize) & 1) == 1 {
+			chunkSize++ // pad byte if odd-sized chunk
+		}
+		i = payloadStart + int(chunkSize)
+	}
+
+	if w.codec.Name == "" || w.codec.SampleRate == 0 || w.codec.BitRate == 0 {
+		return nil, fmt.Errorf("fmt chunk not found: %w", UnsupportedFormat)
+	}
+	if len(w.data) == 0 || len(w.headers) == 0 {
+		return nil, fmt.Errorf("data chunk not found: %w", UnsupportedFormat)
+	}
+	return &w, nil
+}
+
 func (w *Wav) DataSize() int {
 	return len(w.data)
 }
@@ -64,6 +131,10 @@ func (w *Wav) Read(p []byte) (n int, err error) {
 	n += dr
 
 	return n, nil
+}
+
+func (w *Wav) Codec() *Codec {
+	return w.codec
 }
 
 func (w *Wav) prepareHeaders() {
