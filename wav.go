@@ -153,6 +153,10 @@ func (w *Wav) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
+func (w *Wav) Codec() *Codec {
+	return w.codec
+}
+
 func (w *Wav) prepareHeaders() {
 	w.headers = make([]byte, w.headersSize())
 
