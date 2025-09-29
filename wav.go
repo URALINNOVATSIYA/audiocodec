@@ -22,6 +22,93 @@ func NewWav(codec *Codec) *Wav {
 	}
 }
 
+func NewWavFromBytes(b []byte) (*Wav, error) {
+	if len(b) < 12 || !(b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F') || !(b[8] == 'W' && b[9] == 'A' && b[10] == 'V' && b[11] == 'E') {
+		return nil, InvalidWAV
+	}
+
+	var (
+		codecFound bool
+		dataFound  bool
+		dataStart  int
+		dataSize   uint32
+		c          Codec
+	)
+
+	i := 12
+	n := len(b)
+	for {
+		if i+8 > n {
+			break
+		}
+		chunkID0, chunkID1, chunkID2, chunkID3 := b[i], b[i+1], b[i+2], b[i+3]
+		chunkSize := binary.LittleEndian.Uint32(b[i+4 : i+8])
+		payloadStart := i + 8
+		payloadEnd := payloadStart + int(chunkSize)
+		if payloadEnd > n {
+			return nil, TruncatedWAV
+		}
+
+		if chunkID0 == 'f' && chunkID1 == 'm' && chunkID2 == 't' && chunkID3 == ' ' {
+			if chunkSize < 16 {
+				return nil, fmt.Errorf("invalid fmt chunk: size=%d", chunkSize)
+			}
+			audioFormat := binary.LittleEndian.Uint16(b[payloadStart+0 : payloadStart+2])
+			numChannels := binary.LittleEndian.Uint16(b[payloadStart+2 : payloadStart+4])
+			sampleRate := binary.LittleEndian.Uint32(b[payloadStart+4 : payloadStart+8])
+			bitsPerSample := binary.LittleEndian.Uint16(b[payloadStart+14 : payloadStart+16])
+
+			switch audioFormat {
+			case 1:
+				c.Name = Pcm
+			case 6:
+				c.Name = PcmA
+			case 7:
+				c.Name = PcmU
+			default:
+				return nil, fmt.Errorf("%w: format tag=%d", UnsupportedFormat, audioFormat)
+			}
+			if numChannels != 1 {
+				return nil, StereoNotSupported
+			}
+			c.SampleRate = int(sampleRate)
+			c.BitRate = int(bitsPerSample)
+			codecFound = true
+		} else if chunkID0 == 'd' && chunkID1 == 'a' && chunkID2 == 't' && chunkID3 == 'a' {
+			dataFound = true
+			dataStart = payloadStart
+			dataSize = chunkSize
+		}
+
+		step := int(chunkSize)
+		if (chunkSize & 1) == 1 {
+			step++
+		}
+		i = payloadStart + step
+	}
+
+	if !codecFound {
+		return nil, fmt.Errorf("fmt chunk not found")
+	}
+	if !dataFound {
+		return nil, fmt.Errorf("data chunk not found")
+	}
+	if int(dataSize) < 0 || dataStart > n-int(dataSize) {
+		return nil, TruncatedWAV
+	}
+
+	hdr := b[:dataStart:dataStart]
+	d := b[dataStart : dataStart+int(dataSize) : dataStart+int(dataSize)]
+
+	return &Wav{
+		headers:  hdr,
+		data:     d,
+		codec:    &c,
+		read:     0,
+		editable: false,
+	}, nil
+}
+
 func (w *Wav) DataSize() int {
 	return len(w.data)
 }
