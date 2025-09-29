@@ -24,7 +24,7 @@ func NewWav(codec *Codec) *Wav {
 
 func NewWavFromBytes(b []byte) (*Wav, error) {
 	if len(b) < 12 || !(b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F') || !(b[8] == 'W' && b[9] == 'A' && b[10] == 'V' && b[11] == 'E') {
-		return nil, InvalidWAV
+		return nil, InvalidWav
 	}
 
 	var (
@@ -41,15 +41,15 @@ func NewWavFromBytes(b []byte) (*Wav, error) {
 		if i+8 > n {
 			break
 		}
-		chunkID0, chunkID1, chunkID2, chunkID3 := b[i], b[i+1], b[i+2], b[i+3]
+		chunkId0, chunkId1, chunkId2, chunkId3 := b[i], b[i+1], b[i+2], b[i+3]
 		chunkSize := binary.LittleEndian.Uint32(b[i+4 : i+8])
 		payloadStart := i + 8
 		payloadEnd := payloadStart + int(chunkSize)
 		if payloadEnd > n {
-			return nil, TruncatedWAV
+			return nil, TruncatedWav
 		}
 
-		if chunkID0 == 'f' && chunkID1 == 'm' && chunkID2 == 't' && chunkID3 == ' ' {
+		if chunkId0 == 'f' && chunkId1 == 'm' && chunkId2 == 't' && chunkId3 == ' ' {
 			if chunkSize < 16 {
 				return nil, fmt.Errorf("invalid fmt chunk: size=%d", chunkSize)
 			}
@@ -74,7 +74,7 @@ func NewWavFromBytes(b []byte) (*Wav, error) {
 			c.SampleRate = int(sampleRate)
 			c.BitRate = int(bitsPerSample)
 			codecFound = true
-		} else if chunkID0 == 'd' && chunkID1 == 'a' && chunkID2 == 't' && chunkID3 == 'a' {
+		} else if chunkId0 == 'd' && chunkId1 == 'a' && chunkId2 == 't' && chunkId3 == 'a' {
 			dataFound = true
 			dataStart = payloadStart
 			dataSize = chunkSize
@@ -94,7 +94,7 @@ func NewWavFromBytes(b []byte) (*Wav, error) {
 		return nil, fmt.Errorf("data chunk not found")
 	}
 	if int(dataSize) < 0 || dataStart > n-int(dataSize) {
-		return nil, TruncatedWAV
+		return nil, TruncatedWav
 	}
 
 	hdr := b[:dataStart:dataStart]
