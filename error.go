@@ -9,5 +9,5 @@ var (
 	InvalidWav                        = errors.New("invalid WAV: missing RIFF/WAVE")
 	TruncatedWav                      = errors.New("invalid WAV: truncated chunk")
 	UnsupportedFormat                 = errors.New("unsupported WAV format")
-	StereoNotSupported                = errors.New("unsupported WAV: only mono supported by Codec")
+	OnlyMonoSupported                 = errors.New("unsupported WAV: only mono supported by Codec")
 )

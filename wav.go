@@ -23,17 +23,12 @@ func NewWav(codec *Codec) *Wav {
 }
 
 func NewWavFromBytes(b []byte) (*Wav, error) {
-	if len(b) < 12 || !(b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F') || !(b[8] == 'W' && b[9] == 'A' && b[10] == 'V' && b[11] == 'E') {
+	if len(b) < 44 || !(b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F') || !(b[8] == 'W' && b[9] == 'A' && b[10] == 'V' && b[11] == 'E') {
 		return nil, InvalidWav
 	}
 
-	var (
-		codecFound bool
-		dataFound  bool
-		dataStart  int
-		dataSize   uint32
-		c          Codec
-	)
+	var w Wav
+	w.codec = new(Codec)
 
 	i := 12
 	n := len(b)
@@ -60,24 +55,22 @@ func NewWavFromBytes(b []byte) (*Wav, error) {
 
 			switch audioFormat {
 			case 1:
-				c.Name = Pcm
+				w.codec.Name = Pcm
 			case 6:
-				c.Name = PcmA
+				w.codec.Name = PcmA
 			case 7:
-				c.Name = PcmU
+				w.codec.Name = PcmU
 			default:
 				return nil, fmt.Errorf("%w: format tag=%d", UnsupportedFormat, audioFormat)
 			}
 			if numChannels != 1 {
-				return nil, StereoNotSupported
+				return nil, OnlyMonoSupported
 			}
-			c.SampleRate = int(sampleRate)
-			c.BitRate = int(bitsPerSample)
-			codecFound = true
+			w.codec.SampleRate = int(sampleRate)
+			w.codec.BitRate = int(bitsPerSample)
 		} else if chunkId0 == 'd' && chunkId1 == 'a' && chunkId2 == 't' && chunkId3 == 'a' {
-			dataFound = true
-			dataStart = payloadStart
-			dataSize = chunkSize
+			w.headers = b[:payloadStart:payloadStart]
+			w.data = b[payloadStart : payloadStart+int(chunkSize) : payloadStart+int(chunkSize)]
 		}
 
 		step := int(chunkSize)
@@ -87,26 +80,13 @@ func NewWavFromBytes(b []byte) (*Wav, error) {
 		i = payloadStart + step
 	}
 
-	if !codecFound {
-		return nil, fmt.Errorf("fmt chunk not found")
+	if w.codec.Name == "" || w.codec.SampleRate == 0 || w.codec.BitRate == 0 {
+		return nil, fmt.Errorf("fmt chunk not found: %w", UnsupportedFormat)
 	}
-	if !dataFound {
-		return nil, fmt.Errorf("data chunk not found")
+	if len(w.data) == 0 || len(w.headers) == 0 {
+		return nil, fmt.Errorf("data chunk not found: %w", UnsupportedFormat)
 	}
-	if int(dataSize) < 0 || dataStart > n-int(dataSize) {
-		return nil, TruncatedWav
-	}
-
-	hdr := b[:dataStart:dataStart]
-	d := b[dataStart : dataStart+int(dataSize) : dataStart+int(dataSize)]
-
-	return &Wav{
-		headers:  hdr,
-		data:     d,
-		codec:    &c,
-		read:     0,
-		editable: false,
-	}, nil
+	return &w, nil
 }
 
 func (w *Wav) DataSize() int {
