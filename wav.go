@@ -189,7 +189,7 @@ func (w *Wav) compressionCode() int {
 	panic(fmt.Errorf("compression code not found for \"%s\" codec", w.codec.Name))
 }
 
-func (w *Wav) ExportTo(writer io.Writer) (size int, err error) {
+func (w *Wav) WriteTo(writer io.Writer) (size int64, err error) {
 	if w.editable {
 		w.editable = false
 		w.prepareHeaders()
@@ -199,12 +199,12 @@ func (w *Wav) ExportTo(writer io.Writer) (size int, err error) {
 	if n, err = writer.Write(w.headers); err != nil {
 		return 0, err
 	}
-	size += n
+	size += int64(n)
 
 	if n, err = writer.Write(w.data); err != nil {
 		return 0, err
 	}
-	size += n
+	size += int64(n)
 
 	return size, nil
 }
