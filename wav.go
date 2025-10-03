@@ -278,3 +278,7 @@ func (w *Wav) factSize() int {
 func (w *Wav) dataChunkSize() int {
 	return 8 + len(w.data)
 }
+
+func (w *Wav) Data() []byte {
+	return w.data
+}
