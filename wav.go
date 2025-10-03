@@ -280,8 +280,5 @@ func (w *Wav) dataChunkSize() int {
 }
 
 func (w *Wav) Data() []byte {
-	if w.data == nil {
-		return nil
-	}
 	return w.data
 }
