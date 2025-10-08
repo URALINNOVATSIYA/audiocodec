@@ -22,6 +22,8 @@ const (
 	MediumQuality   Quality = C.SOXR_MQ  // MediumQuality 16-bit with medium rolloff
 	HighQuality     Quality = C.SOXR_HQ  // HighQuality high quality
 	VeryHighQuality Quality = C.SOXR_VHQ // VeryHighQuality very high quality
+
+	maxResampleFrameDuration = 100 * time.Millisecond
 )
 
 type Resampler struct {
@@ -38,7 +40,7 @@ type Resampler struct {
 	outgoingAudio  *audiocodec.Wav
 }
 
-func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, outgoingBufferDuration time.Duration, quality Quality) (*Resampler, error) {
+func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, quality Quality) (*Resampler, error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
 		return nil, audiocodec.NotPcm
 	}
@@ -50,7 +52,7 @@ func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Cod
 	resampler := &Resampler{
 		incomingCodec:  incomingCodec,
 		outgoingCodec:  outgoingCodec,
-		outgoingBuffer: make([]byte, outgoingCodec.Size(outgoingBufferDuration)),
+		outgoingBuffer: make([]byte, outgoingCodec.Size(maxResampleFrameDuration)),
 	}
 
 	var err error
@@ -99,13 +101,43 @@ func (r *Resampler) dataType(codec *audiocodec.Codec) (C.soxr_datatype_t, error)
 	case 16:
 		return C.SOXR_INT16, nil
 	case 32:
-		return C.SOXR_FLOAT32, nil
+		return C.SOXR_INT32, nil
 	default:
 		return 0, fmt.Errorf("not supported bit rate: %d", codec.BitRate)
 	}
 }
 
-func (r *Resampler) Resample(incomingFrame []byte) ([]byte, error) {
+func (r *Resampler) Resample(incomingData []byte) ([]byte, error) {
+	incomingDataSize := len(incomingData)
+	outgoingData := make([]byte, r.outgoingCodec.Size(r.incomingCodec.Duration(incomingDataSize))+r.delaySize())
+	maxResampleFrameSize := r.incomingCodec.Size(maxResampleFrameDuration)
+
+	var outgoingDataPos int
+	var chunk []byte
+	var err error
+	for pos := 0; pos < incomingDataSize; pos += maxResampleFrameSize {
+		to := pos + maxResampleFrameSize
+		if to > incomingDataSize {
+			chunk, err = r.resample(incomingData[pos:])
+		} else {
+			chunk, err = r.resample(incomingData[pos:to])
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		chunkLen := len(chunk)
+		if chunkLen > 0 {
+			copy(outgoingData[outgoingDataPos:outgoingDataPos+chunkLen], chunk)
+			outgoingDataPos += chunkLen
+		}
+	}
+
+	return outgoingData[:outgoingDataPos], nil
+}
+
+func (r *Resampler) resample(incomingFrame []byte) ([]byte, error) {
 	r.soxErr = C.soxr_process(
 		r.soxr,
 		C.soxr_in_t(&incomingFrame[0]),
@@ -128,6 +160,34 @@ func (r *Resampler) Resample(incomingFrame []byte) ([]byte, error) {
 }
 
 func (r *Resampler) Flush() ([]byte, error) {
+	outgoingData := make([]byte, r.delaySize())
+	outgoingDataPos := 0
+
+	if len(outgoingData) == 0 {
+		return nil, nil
+	}
+
+	for {
+		chunk, err := r.flush()
+		if err != nil {
+			return nil, err
+		}
+
+		chunkLen := len(chunk)
+		if chunkLen > 0 {
+			copy(outgoingData[outgoingDataPos:outgoingDataPos+chunkLen], chunk)
+			outgoingDataPos += chunkLen
+		}
+
+		if len(chunk) < len(r.outgoingBuffer) {
+			break
+		}
+	}
+
+	return outgoingData[:outgoingDataPos], nil
+}
+
+func (r *Resampler) flush() ([]byte, error) {
 	r.soxErr = C.soxr_process(
 		r.soxr,
 		nil,
@@ -197,4 +257,46 @@ func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int64, erro
 	}(file)
 
 	return wav.WriteTo(file)
+}
+
+func (r *Resampler) delaySize() int {
+	return r.outgoingCodec.SizeBySampleCount(int(C.soxr_delay(r.soxr)))
+}
+
+func (r *Resampler) StreamResample(incomingCh <-chan []byte) <-chan []byte {
+	outgoingCh := make(chan []byte)
+
+	go func() {
+		defer close(outgoingCh)
+
+		for incomingChunk := range incomingCh {
+			if len(incomingChunk) == 0 {
+				continue
+			}
+
+			outgoingChunk, err := r.Resample(incomingChunk)
+			if err != nil {
+				return
+			}
+
+			if len(outgoingChunk) == 0 {
+				continue
+			}
+
+			outgoingCh <- outgoingChunk
+		}
+
+		outgoingChunk, err := r.Flush()
+		if err != nil {
+			return
+		}
+
+		if len(outgoingChunk) == 0 {
+			return
+		}
+
+		outgoingCh <- outgoingChunk
+	}()
+
+	return outgoingCh
 }

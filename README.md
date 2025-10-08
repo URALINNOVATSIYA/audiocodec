@@ -85,7 +85,6 @@ import (
 	_ "embed"
 	"github.com/URALINNOVATSIYA/audiocodec"
 	"github.com/URALINNOVATSIYA/audiocodec/resample/libswresample"
-	"time"
 )
 
 //go:embed audio.wav
@@ -94,39 +93,21 @@ var incomingData []byte
 func main() {
 	var outgoingData []byte
 
-	incomingDataLen := len(incomingData)
-	// Вычисляем размер чанка входных данных
-	incomingChunkSize := codec.Pcm16kHz16bCodec.Size(20 * time.Millisecond)
-
-	resampler, err := libswresample.NewResampler(codec.Pcm16kHz16bCodec, codec.Pcm8kHz16bCodec, 20 * time.Millisecond)
+	resampler, err := libswresample.NewResampler(audiocodec.Pcm16kHz16bCodec, audiocodec.Pcm8kHz16bCodec)
 	if err != nil {
 		panic(err)
 	}
 	defer resampler.Free()
 	
-	var outgoingChunk []byte
 	// Начинаем с 44, т.к. 44 байта в WAV файле с несжатым аудио это заголовки
-	for pos := 44; pos < incomingDataLen; pos += incomingChunkSize {
-		to := pos + incomingChunkSize
-		if to > incomingDataLen {
-			outgoingChunk, err = resampler.Resample(incomingData[pos:])
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			outgoingChunk, err = resampler.Resample(incomingData[pos:pos+incomingChunkSize])
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		if len(outgoingChunk) > 0 {
-			outgoingData = append(outgoingData, outgoingChunk...)
-		}
+	outgoingData, err = resampler.Resample(incomingData[44:])
+	if err != nil {
+		panic(err)
 	}
 
-	// Промываем внутренний буфер по окончании ресемплирования, т.к. во внутреннем буфере могут остаться необработанные
-	// данные
+	var outgoingChunk []byte
+	// Промываем внутренний буфер по окончании ресемплирования, 
+	// т.к. во внутреннем буфере могут остаться необработанные данные
 	outgoingChunk, err = resampler.Flush()
 	if err != nil {
 		panic(err)
