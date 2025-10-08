@@ -56,6 +56,10 @@ func NewCodec(name Name, sampleRate int, bitRate int) *Codec {
 	}
 }
 
+func NewPcmCodec(sampleRate int, bitRate int) *Codec {
+	return NewCodec(Pcm, sampleRate, bitRate)
+}
+
 func (c *Codec) SampleSize() int {
 	return c.BitRate / 8
 }
