@@ -300,3 +300,11 @@ func (r *Resampler) StreamResample(incomingCh <-chan []byte) <-chan []byte {
 
 	return outgoingCh
 }
+
+func (r *Resampler) IncomingCodec() *audiocodec.Codec {
+	return r.incomingCodec
+}
+
+func (r *Resampler) OutgoingCodec() *audiocodec.Codec {
+	return r.outgoingCodec
+}
