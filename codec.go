@@ -48,6 +48,14 @@ type Codec struct {
 	BitRate    int  `json:"bitRate"`
 }
 
+func NewCodec(name Name, sampleRate int, bitRate int) *Codec {
+	return &Codec{
+		Name:       name,
+		SampleRate: sampleRate,
+		BitRate:    bitRate,
+	}
+}
+
 func (c *Codec) SampleSize() int {
 	return c.BitRate / 8
 }
