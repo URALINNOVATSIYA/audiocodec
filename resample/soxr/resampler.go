@@ -9,9 +9,11 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"github.com/URALINNOVATSIYA/audiocodec"
 	"os"
 	"time"
+
+	"github.com/URALINNOVATSIYA/audiocodec"
+	"github.com/URALINNOVATSIYA/audiocodec/resample"
 )
 
 type Quality C.int
@@ -24,7 +26,14 @@ const (
 	VeryHighQuality Quality = C.SOXR_VHQ // VeryHighQuality very high quality
 )
 
-type Resampler struct {
+type Params struct {
+	IncomingCodec          *audiocodec.Codec
+	OutgoingCodec          *audiocodec.Codec
+	OutgoingBufferDuration time.Duration
+	Quality                Quality
+}
+
+type Resampler[P Params] struct {
 	soxr         C.soxr_t
 	incomingUsed C.size_t
 	outgoingUsed C.size_t
@@ -36,9 +45,21 @@ type Resampler struct {
 	debug          bool
 	incomingAudio  *audiocodec.Wav
 	outgoingAudio  *audiocodec.Wav
+
+	params P
 }
 
-func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, outgoingBufferDuration time.Duration, quality Quality) (*Resampler, error) {
+type Pool = resample.Pool[*Resampler[Params], Params]
+
+func NewPool() *Pool {
+	ctor := func(params Params) (*Resampler[Params], error) {
+		return NewResampler(params.IncomingCodec, params.OutgoingCodec, params.OutgoingBufferDuration, params.Quality)
+	}
+
+	return resample.NewPool(ctor)
+}
+
+func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Codec, outgoingBufferDuration time.Duration, quality Quality) (*Resampler[Params], error) {
 	if !incomingCodec.IsPcm() || !outgoingCodec.IsPcm() {
 		return nil, audiocodec.NotPcm
 	}
@@ -47,7 +68,15 @@ func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Cod
 		return nil, audiocodec.IncomingAndOutgoingCodecsIsEquals
 	}
 
-	resampler := &Resampler{
+	params := Params{
+		IncomingCodec:          incomingCodec,
+		OutgoingCodec:          outgoingCodec,
+		OutgoingBufferDuration: outgoingBufferDuration,
+		Quality:                quality,
+	}
+
+	resampler := &Resampler[Params]{
+		params:         params,
 		incomingCodec:  incomingCodec,
 		outgoingCodec:  outgoingCodec,
 		outgoingBuffer: make([]byte, outgoingCodec.Size(outgoingBufferDuration)),
@@ -86,7 +115,7 @@ func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Cod
 	return resampler, nil
 }
 
-func (r *Resampler) error() error {
+func (r *Resampler[P]) error() error {
 	soxrErrStr := C.GoString(r.soxErr)
 	if soxrErrStr != "" && soxrErrStr != "0" {
 		return errors.New(soxrErrStr)
@@ -94,7 +123,7 @@ func (r *Resampler) error() error {
 	return nil
 }
 
-func (r *Resampler) dataType(codec *audiocodec.Codec) (C.soxr_datatype_t, error) {
+func (r *Resampler[P]) dataType(codec *audiocodec.Codec) (C.soxr_datatype_t, error) {
 	switch codec.BitRate {
 	case 16:
 		return C.SOXR_INT16, nil
@@ -105,7 +134,7 @@ func (r *Resampler) dataType(codec *audiocodec.Codec) (C.soxr_datatype_t, error)
 	}
 }
 
-func (r *Resampler) Resample(incomingFrame []byte) ([]byte, error) {
+func (r *Resampler[P]) Resample(incomingFrame []byte) ([]byte, error) {
 	r.soxErr = C.soxr_process(
 		r.soxr,
 		C.soxr_in_t(&incomingFrame[0]),
@@ -127,7 +156,7 @@ func (r *Resampler) Resample(incomingFrame []byte) ([]byte, error) {
 	return r.outgoingBuffer[:r.outgoingCodec.SizeBySampleCount(int(r.outgoingUsed))], nil
 }
 
-func (r *Resampler) Flush() ([]byte, error) {
+func (r *Resampler[P]) Flush() ([]byte, error) {
 	r.soxErr = C.soxr_process(
 		r.soxr,
 		nil,
@@ -148,7 +177,7 @@ func (r *Resampler) Flush() ([]byte, error) {
 	return r.outgoingBuffer[:r.outgoingCodec.SizeBySampleCount(int(r.outgoingUsed))], nil
 }
 
-func (r *Resampler) Free() error {
+func (r *Resampler[P]) Free() error {
 	r.soxErr = C.soxr_clear(r.soxr)
 	if err := r.error(); err != nil {
 		return err
@@ -158,7 +187,7 @@ func (r *Resampler) Free() error {
 	return nil
 }
 
-func (r *Resampler) Reset() error {
+func (r *Resampler[P]) Reset() error {
 	r.soxErr = C.soxr_clear(r.soxr)
 	if err := r.error(); err != nil {
 		return err
@@ -167,27 +196,27 @@ func (r *Resampler) Reset() error {
 	return nil
 }
 
-func (r *Resampler) DebugEnable() {
+func (r *Resampler[P]) DebugEnable() {
 	r.debug = true
 	r.incomingAudio = audiocodec.NewWav(r.incomingCodec)
 	r.outgoingAudio = audiocodec.NewWav(r.outgoingCodec)
 }
 
-func (r *Resampler) DebugDisable() {
+func (r *Resampler[P]) DebugDisable() {
 	r.debug = false
 	r.incomingAudio = nil
 	r.outgoingAudio = nil
 }
 
-func (r *Resampler) SaveIncomingAudio(fileName string) (int64, error) {
+func (r *Resampler[P]) SaveIncomingAudio(fileName string) (int64, error) {
 	return r.saveAudio(fileName, r.incomingAudio)
 }
 
-func (r *Resampler) SaveOutgoingAudio(fileName string) (int64, error) {
+func (r *Resampler[P]) SaveOutgoingAudio(fileName string) (int64, error) {
 	return r.saveAudio(fileName, r.outgoingAudio)
 }
 
-func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int64, error) {
+func (r *Resampler[P]) saveAudio(fileName string, wav *audiocodec.Wav) (int64, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return 0, err
@@ -197,4 +226,8 @@ func (r *Resampler) saveAudio(fileName string, wav *audiocodec.Wav) (int64, erro
 	}(file)
 
 	return wav.WriteTo(file)
+}
+
+func (r *Resampler[P]) Params() P {
+	return r.params
 }
