@@ -106,8 +106,9 @@ func hash(
 	outBitRate int,
 ) int64 {
 
-	return int64(inSampleRate&0x3FFFF)<<48 |
-		int64(inBitRate&0x3F)<<42 |
-		int64(outSampleRate&0x3FFFF)<<24 |
-		int64(outBitRate&0x3F)<<18
+	return int64(inSampleRate&0x3FFFF)<<30 |
+		int64(inBitRate&0x3F)<<24 |
+		int64(outSampleRate&0x3FFFF)<<6 |
+		int64(outBitRate&0x3F)
+
 }
