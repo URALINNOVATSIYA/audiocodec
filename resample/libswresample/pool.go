@@ -11,7 +11,7 @@ type Pool struct {
 	items map[int64][]*Resampler
 }
 
-func New() *Pool {
+func NewPool() *Pool {
 	return &Pool{
 		mu:    &sync.RWMutex{},
 		items: make(map[int64][]*Resampler),
