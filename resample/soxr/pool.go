@@ -12,7 +12,7 @@ type Pool struct {
 	quality Quality
 }
 
-func New(
+func NewPool(
 	quality Quality,
 ) *Pool {
 
