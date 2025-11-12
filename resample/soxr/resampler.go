@@ -9,9 +9,10 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"github.com/URALINNOVATSIYA/audiocodec"
 	"os"
 	"time"
+
+	"github.com/URALINNOVATSIYA/audiocodec"
 )
 
 type Quality C.int
@@ -160,7 +161,8 @@ func (r *Resampler) resample(incomingFrame []byte) ([]byte, error) {
 }
 
 func (r *Resampler) Flush() ([]byte, error) {
-	outgoingData := make([]byte, r.delaySize())
+	// Sometimes soxr_delay returns a value that is lower than it actually is
+	outgoingData := make([]byte, r.delaySize()+r.outgoingCodec.SizeBySampleCount(10))
 	outgoingDataPos := 0
 
 	if len(outgoingData) == 0 {
