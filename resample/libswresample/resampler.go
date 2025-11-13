@@ -1,12 +1,16 @@
 package libswresample
 
 /*
-	#cgo pkg-config: libswresample
-	#cgo pkg-config: libavutil
+#cgo pkg-config: libswresample
+#cgo pkg-config: libavutil
 
-	#include <libswresample/swresample.h>
-	#include <libavutil/opt.h>
-	#include <libavutil/samplefmt.h>
+#include <libswresample/swresample.h>
+#include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
+
+static inline AVChannelLayout get_mono_layout(void) {
+	return (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
+}
 */
 import "C"
 import (
@@ -51,8 +55,9 @@ func NewResampler(incomingCodec *audiocodec.Codec, outgoingCodec *audiocodec.Cod
 		outgoingBuffer:  make([]byte, outgoingCodec.Size(maxResampleFrameDuration)),
 	}
 
-	C.av_opt_set_channel_layout(unsafe.Pointer(r.swrContext), C.CString("in_channel_layout"), C.AV_CH_LAYOUT_MONO, 0)
-	C.av_opt_set_channel_layout(unsafe.Pointer(r.swrContext), C.CString("out_channel_layout"), C.AV_CH_LAYOUT_MONO, 0)
+	monoLayout := C.get_mono_layout()
+	C.av_opt_set_chlayout(unsafe.Pointer(r.swrContext), C.CString("in_chlayout"), &monoLayout, 0)
+	C.av_opt_set_chlayout(unsafe.Pointer(r.swrContext), C.CString("out_chlayout"), &monoLayout, 0)
 	C.av_opt_set_int(unsafe.Pointer(r.swrContext), C.CString("in_sample_rate"), C.int64_t(incomingCodec.SampleRate), 0)
 	C.av_opt_set_int(unsafe.Pointer(r.swrContext), C.CString("out_sample_rate"), C.int64_t(outgoingCodec.SampleRate), 0)
 

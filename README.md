@@ -39,7 +39,7 @@ sudo apt install libsoxr0
 
 ### libswresample
 
-Является частью проекта FFmpeg и предназначена для обработки аудиоданных
+Является частью проекта FFmpeg и предназначена для обработки аудио данных. Требуется версия ffmpeg 7 или выше.
 
 Оф. сайт - https://ffmpeg.org/libswresample.html
 
